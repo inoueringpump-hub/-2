@@ -1,0 +1,314 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>花粉ハンター ULTRA</title>
+<style>
+body{
+ margin:0;
+ overflow:hidden;
+ background:linear-gradient(#bfe9ff,#e8faff);
+ font-family:Arial;
+}
+#ui{
+ position:fixed;
+ top:10px;
+ left:10px;
+ background:rgba(255,255,255,0.9);
+ padding:10px 14px;
+ border-radius:10px;
+}
+#gameOver{
+ position:fixed;
+ top:50%;
+ left:50%;
+ transform:translate(-50%,-50%);
+ font-size:40px;
+ display:none;
+ text-align:center;
+ background:white;
+ padding:30px;
+ border-radius:20px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+スコア: <span id="score">0</span><br>
+くしゃみ: <span id="sneeze">0</span>/100<br>
+レベル: <span id="level">1</span><br>
+最高スコア: <span id="best">0</span>
+</div>
+
+<div id="gameOver">
+🤧 花粉に敗北！ 🤧<br><br>
+クリックで再スタート
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+let player={x:canvas.width/2,y:canvas.height-80,size:40};
+
+let pollen=[];
+let bullets=[];
+let particles=[];
+
+let tornado=null;
+
+let score=0;
+let sneeze=0;
+let level=1;
+let gameRunning=true;
+
+let best=localStorage.getItem("kafun_best")||0;
+document.getElementById("best").innerText=best;
+
+document.addEventListener("mousemove",e=>{
+ player.x=e.clientX;
+});
+
+document.addEventListener("touchmove",e=>{
+ player.x=e.touches[0].clientX;
+});
+
+function shoot(){
+
+ bullets.push({
+  x:player.x,
+  y:player.y,
+  size:8,
+  speed:8
+ });
+
+}
+
+document.addEventListener("click",()=>{
+
+ if(!gameRunning){
+ location.reload();
+ }
+
+ shoot();
+
+});
+
+document.addEventListener("touchstart",shoot);
+
+function spawnPollen(){
+
+ let type="sugi";
+
+ if(score>500 && Math.random()<0.4) type="hinoki";
+
+ pollen.push({
+  x:Math.random()*canvas.width,
+  y:-20,
+  type:type,
+  size:type==="sugi"?15:18,
+  speed:type==="sugi"?2:3
+ });
+
+}
+
+setInterval(spawnPollen,400);
+
+function spawnTornado(){
+
+ if(score>1200 && !tornado){
+
+ tornado={
+  x:Math.random()*canvas.width,
+  y:200,
+  size:100
+ };
+
+ }
+
+}
+
+setInterval(spawnTornado,5000);
+
+function explosion(x,y){
+
+ for(let i=0;i<15;i++){
+
+  particles.push({
+   x:x,
+   y:y,
+   vx:(Math.random()-0.5)*6,
+   vy:(Math.random()-0.5)*6,
+   life:30
+  });
+
+ }
+
+}
+
+function drawPlayer(){
+
+ ctx.fillStyle="blue";
+ ctx.fillRect(player.x-player.size/2,player.y-player.size/2,player.size,player.size);
+ ctx.font="22px Arial";
+ ctx.fillText("😷",player.x-10,player.y+7);
+
+}
+
+function drawPollen(){
+
+ for(let i=pollen.length-1;i>=0;i--){
+
+  let p=pollen[i];
+
+  p.y+=p.speed;
+
+  ctx.fillStyle=p.type==="sugi"?"green":"darkgreen";
+
+  ctx.beginPath();
+  ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle="white";
+  ctx.fillText("🌲",p.x-8,p.y+5);
+
+  if(p.y>canvas.height){
+
+   pollen.splice(i,1);
+   sneeze+=10;
+
+  }
+
+  for(let j=bullets.length-1;j>=0;j--){
+
+   let b=bullets[j];
+
+   let dx=p.x-b.x;
+   let dy=p.y-b.y;
+
+   if(Math.sqrt(dx*dx+dy*dy)<p.size+b.size){
+
+    explosion(p.x,p.y);
+
+    pollen.splice(i,1);
+    bullets.splice(j,1);
+
+    score+=p.type==="sugi"?10:20;
+
+    break;
+
+   }
+
+  }
+
+ }
+
+}
+
+function drawBullets(){
+
+ for(let i=bullets.length-1;i>=0;i--){
+
+  let b=bullets[i];
+  b.y-=b.speed;
+
+  ctx.fillStyle="red";
+
+  ctx.beginPath();
+  ctx.arc(b.x,b.y,b.size,0,Math.PI*2);
+  ctx.fill();
+
+  if(b.y<0) bullets.splice(i,1);
+
+ }
+
+}
+
+function drawParticles(){
+
+ for(let i=particles.length-1;i>=0;i--){
+
+  let p=particles[i];
+
+  p.x+=p.vx;
+  p.y+=p.vy;
+  p.life--;
+
+  ctx.fillStyle="yellow";
+  ctx.fillRect(p.x,p.y,3,3);
+
+  if(p.life<=0) particles.splice(i,1);
+
+ }
+
+}
+
+function drawTornado(){
+
+ if(!tornado) return;
+
+ ctx.font="60px Arial";
+ ctx.fillText("🌪",tornado.x,tornado.y);
+
+ let dx=player.x-tornado.x;
+ let dy=player.y-tornado.y;
+
+ if(Math.sqrt(dx*dx+dy*dy)<80){
+
+  sneeze+=1;
+
+ }
+
+}
+
+function update(){
+
+ if(!gameRunning) return;
+
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+
+ drawPlayer();
+ drawPollen();
+ drawBullets();
+ drawParticles();
+ drawTornado();
+
+ document.getElementById("score").innerText=score;
+ document.getElementById("sneeze").innerText=sneeze;
+
+ level=1+Math.floor(score/400);
+ document.getElementById("level").innerText=level;
+
+ if(score>best){
+
+  best=score;
+  localStorage.setItem("kafun_best",best);
+
+ }
+
+ if(sneeze>=100){
+
+  gameRunning=false;
+
+  document.getElementById("gameOver").style.display="block";
+
+ }
+
+ requestAnimationFrame(update);
+
+}
+
+update();
+
+</script>
+
+</body>
+</html>
